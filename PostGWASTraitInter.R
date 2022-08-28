@@ -19,7 +19,6 @@ unify_sumstat_colnames<-function(sumstat, outcomename=gwasname,rsid_coln=rsid_co
 }
 
 two_sample_mr.backward.singular<-function(outcome_sumstat=processed_sumstat_name, exposure_id, exposure_name, exposure_threshold_p=MR.BACKWARD.THRESHOLD_PVAL, eval_singlesnp=TRUE){
-  print('Performing two sample MR for:')
   print(paste('Exposure:',exposure_name))
   
   instruments<-extract_instruments(exposure_id, p1=exposure_threshold_p)
@@ -36,51 +35,141 @@ two_sample_mr.backward.singular<-function(outcome_sumstat=processed_sumstat_name
     samplesize_col = "npersons",
     phenotype_col='phenotype'
   )
-  dat <- harmonise_data(instruments, outcomes) 
-  res <- generate_odds_ratios(mr(dat))
-  scatter<-mr_scatter_plot(res, dat)
-  pleiotropy_test<-mr_pleiotropy_test(dat)
-  pleiotropy_test_p=pleiotropy_test$pval
-  heterogeneity_test<-mr_heterogeneity(dat)
-  
-  res<-res %>% 
-    mutate(exposure.pipename=exposure_name, exposure_threshold_pval=exposure_threshold_p, pleiotropy_test_pval=pleiotropy_test_p)
-  res<-left_join(res, heterogeneity_test)
+
   result<-list()
-  result$dat<-dat
-  result$res<-res
-  result$scatter<-list(scatter)
-  result$pleiotropy_test<-pleiotropy_test
-  if (eval_singlesnp==TRUE){
-    res_single <- mr_singlesnp(dat)
-    res_single_forestplot<- mr_forest_plot(res_single)
-    result$single_res<-res_single
-    result$single_forest<-list(res_single_forestplot)
+  tryCatch({
+    dat <- harmonise_data(instruments, outcomes) 
+    res <- generate_odds_ratios(mr(dat))
+    scatter<-mr_scatter_plot(res, dat)
+    pleiotropy_test<-mr_pleiotropy_test(dat)
+    pleiotropy_test_p=pleiotropy_test$pval
+    heterogeneity_test<-mr_heterogeneity(dat)
+    
+    res<-res %>% 
+      mutate(exposure.pipename=exposure_name, exposure_threshold_pval=exposure_threshold_p, pleiotropy_test_pval=pleiotropy_test_p)
+    res<-left_join(res, heterogeneity_test)
+    result$dat<-dat
+    result$res<-res
+    result$scatter<-list(scatter)
+    result$pleiotropy_test<-pleiotropy_test
+    if (eval_singlesnp==TRUE){
+      res_single <- mr_singlesnp(dat)
+      res_single_forestplot<- mr_forest_plot(res_single)
+      result$single_res<-res_single
+      result$single_forest<-list(res_single_forestplot)
+    }
+ 
+  }, error = function(e){
+    print('Not enouht SNPs...')
+    }
+    )
+  
+  if (length(result)==0){
+    'Undefined'
+  } else {
+    result
   }
-  result
 }
+
+two_sample_mr.forward.singular<-function(exposure_sumstat=processed_sumstat_name, outcome_id, outcome_name, exposure_threshold_p=MR.FORWARD.THRESHOLD_PVAL, eval_singlesnp=TRUE){
+  instruments<-read_exposure_data(filename=exposure_sumstat,
+                                      sep='\t',
+                                      snp_col = 'rsid',
+                                      beta_col = "effect",
+                                      se_col='se',
+                                      effect_allele_col='A1',
+                                      pval_col = 'pval',
+                                      samplesize_col = 'npersons',
+                                      other_allele_col = 'A2')
+  outcomes<-extract_outcome_data(snps=instruments$SNP, outcomes = outcome_id)
+  tryCatch({
+    dat <- harmonise_data(instruments, outcomes) 
+    res <- generate_odds_ratios(mr(dat))
+    scatter<-mr_scatter_plot(res, dat)
+    pleiotropy_test<-mr_pleiotropy_test(dat)
+    pleiotropy_test_p=pleiotropy_test$pval
+    heterogeneity_test<-mr_heterogeneity(dat)
+    
+    res<-res %>% 
+      mutate(exposure.pipename=exposure_name, exposure_threshold_pval=exposure_threshold_p, pleiotropy_test_pval=pleiotropy_test_p)
+    res<-left_join(res, heterogeneity_test)
+    result$dat<-dat
+    result$res<-res
+    result$scatter<-list(scatter)
+    result$pleiotropy_test<-pleiotropy_test
+    if (eval_singlesnp==TRUE){
+      res_single <- mr_singlesnp(dat)
+      res_single_forestplot<- mr_forest_plot(res_single)
+      result$single_res<-res_single
+      result$single_forest<-list(res_single_forestplot)
+    }
+    
+  }, error = function(e){
+    print('Not enouht SNPs...')
+  }
+  )
+  
+  if (length(result)==0){
+    'Undefined'
+  } else {
+    result
+  }
+}
+
 
 
 
 two_sample_mr.backward.serial<-function(outcome_sumstat=processed_sumstat_name, exposure_ids=MR.COMPARISON_STUDIES, exposure_names=MR.COMPARISON_STUDIES.NAMES, exposure_threshold_p=MR.BACKWARD.THRESHOLD_PVAL, eval_singlesnp=TRUE){
   print('Starting MR evaluation...')
   allres<-list()
-  result_fulldf<-'Undefined'
+  result_fulldf<-tibble()
   print('Starting two sample MR experiment series...')
   for (i in c(1:length(exposure_ids))){
     exposure_id=exposure_ids[i]
     exposure_name<-exposure_names[i]
     cur_result<-two_sample_mr.backward.singular(exposure_id=exposure_id, exposure_name=exposure_name, exposure_threshold_p = exposure_threshold_p, eval_singlesnp = eval_singlesnp)
-    cur_result_df=cur_result$res
-    if (i==1){
-      result_fulldf = cur_result_df
-    } else{
-      result_fulldf = rbind(c(result_fulldf, cur_result_df))
-    }
-    allres[exposure_id]=list(cur_result)
+    if (!cur_result=='Undefined'){
+      cur_result_df=cur_result$res
+      if (length(allres)==0){
+        result_fulldf = cur_result_df
+        print(cur_result_df)
+      } else {
+        result_fulldf = rbind(result_fulldf, cur_result_df)
+      }
+      allres[exposure_id]=list(cur_result)
+    } 
   }
   allres$full_dataframe=result_fulldf
+  allres
 }
+
+two_sample_mr.forward.serial<-function(exposure_sumstat=processed_sumstat_name, outcome_ids=MR.COMPARISON_STUDIES, outcome_names=MR.COMPARISON_STUDIES.NAMES, exposure_threshold_p=MR.FORWARD.THRESHOLD_PVAL, eval_singlesnp=TRUE){
+  print('Starting MR evaluation...')
+  allres<-list()
+  result_fulldf<-tibble()
+  print('Starting two sample MR experiment series...')
+  for (i in c(1:length(outcome_ids))){
+    outcome_id=outcome_ids[i]
+    outcome_name<-outcome_names[i]
+    cur_result<-two_sample_mr.forward.singular(outcome_id=exposure_id, outcome_name=outcome_name, exposure_threshold_p = exposure_threshold_p, eval_singlesnp = eval_singlesnp)
+    if (!cur_result=='Undefined'){
+      cur_result_df=cur_result$res
+      if (length(allres)==0){
+        result_fulldf = cur_result_df
+        print(cur_result_df)
+      } else {
+        result_fulldf = rbind(result_fulldf, cur_result_df)
+      }
+      allres[exposure_id]=list(cur_result)
+    } 
+  }
+  allres$full_dataframe=result_fulldf
+  allres
+}
+
+
+
+
 
 #-----SETTINGS-----
 gwas_sumstatfile_path<-'/home/biorp/Gitrepos/Psychiatry/SUMSTATS/anged/anged/dop_pheno_all.anged.glm.logistic.hybrid'
@@ -97,17 +186,38 @@ or_col='OR'
 rsid_col='rsid'
 npersons=4520
 processed_sumstat_name=paste(gwasname, '_preprocessed.tsv', sep='')
-mr_ts_backward_resname=paste(gwasname, '_twosample_backward.rds')
+mr_ts_backward_resname=paste(gwasname, '_twosample_backward.rds', sep='')
+mr_ts_forward_resname=paste(gwasname, '_twosample_forward.rds', sep='')
 
 #Mendelian Randomization
 #Two Sample
 MR.FORWARD=FALSE
 MR.BACKWARD=TRUE
 ao<-available_outcomes()
-MR.COMPARISON_STUDIES=c('ieu-a-1188','ieu-a-1187','ieu-b-102','ieu-b-41','ieu-b-42','ieu-b-5070','finn-b-F5_GAD','finn-b-KRA_PSY_ANXIETY','ukb-d-KRA_PSY_ANXIETY','finn-b-F5_ALLANXIOUS','ieu-a-118','ebi-a-GCST002920','ebi-a-GCST003770','ebi-a-GCST005327') #indexes of studies from ao
-MR.COMPARISON_STUDIES.NAMES=c('Depression_Wray_2018_ieu-a-1188','Depression_Wray_2018_ieu-a-1187', 'Depression_Howard_2019_ieu-b-102','Bipolar_Stahl_2019_ieu-b-41','Schizophrenia_Ripke_2014_ieu-b-42', 'Schizophrenia_Lam_2019_ieu-b-5070','GAD_NA_2021_finn-b-F5_GAD','Anxiety_NA_2021_finn-b-KRA_PSY_ANXIETY', 'Anxiety_Neale_2018_ukb-d-KRA_PSY_ANXIETY', 'Anxiety_NA_2021_finn-b-F5_ALLANXIOUS','Neuroticism_deMoor_2014_ieu-a-118','Neuroticism_deMoor_2015_ebi-a-GCST002920','Neuroticism_Okbay_2016_ebi-a-GCST003770','Neuroticism_Turley_2018_ebi-a-GCST005327','Neuroticism_Luciano_2017_ebi-a-GCST005232')
+MR.SAVE_ONLYSUMMARY=TRUE
+MR.COMPARISON_STUDIES.MODE='PHENONAMES' #'PHENONAMES' or 'SPECIFIC'
+
+MR.COMPARISON_STUDIES.RUN_PHENONAMES<-c('schiz','depress','bipol','cholester','lipo','diab','fatty','covid','respir','serotonin','cholin','dopamin','anxiety','neuro','mental')
+MR.COMPARISON_STUDIES.RUN_SPECIFIC=c() #indexes of studies from ao
+
+if (MR.COMPARISON_STUDIES.MODE=='PHENONAMES'){
+  MR.COMPARISON_STUDIES<-c()
+  for (substring in MR.COMPARISON_STUDIES.RUN_PHENONAMES){
+    MR.COMPARISON_STUDIES_PT=ao %>%
+      filter(grepl(substring, trait, ignore.case = TRUE)) %>% 
+      select(id) %>% 
+      pull()
+    MR.COMPARISON_STUDIES=c(MR.COMPARISON_STUDIES, MR.COMPARISON_STUDIES_PT)
+  }
+} else {
+  MR.COMPARISON_STUDIES=MR.COMPARISON_STUDIES.RUN_SPECIFIC
+}
+
+MR.COMPARISON_STUDIES.NAMES=rep('default', length(MR.COMPARISON_STUDIES))
+
+
 MR.FORWARD.THRESHOLD_PVALS=c(5e-8) #threshold p-value for instrument extraction from the studied sumstat.
-MR.BACKWARD.THRESHOLD_PVALS=c(5e-7,5e-8)
+MR.BACKWARD.THRESHOLD_PVALS=c(5e-8)
 #Multivariate
 MR.MULTIVARIATE=TRUE
 MR.MULTIVARIATE.COMPARISON_STUDIES.SUMSTAT_PATHS=c()
@@ -177,22 +287,66 @@ if (!file.exists(processed_sumstat_name)){
 #----2. Mendelian randomization (two sample)----
 if (MR.BACKWARD==TRUE){
   if (!file.exists(mr_ts_backward_resname)){
+    print('Performing two sample MR analysis in backward direction (comparison phenotypes->target summary statistic)')
     allres<-list()
     allresdf<-'Undefined'
-    for (ind in c(1:length(MR.BACKWARD.THRESHOLD_PVAL))){
+    total_nsstats=length(MR.BACKWARD.THRESHOLD_PVALS)
+    for (ind in c(1:length(MR.BACKWARD.THRESHOLD_PVALS))){
+      if (ind%%10==0){
+        print(paste(int*100/total_nsstats, 'percent complete...'))
+      }
+      
       MR.BACKWARD.THRESHOLD_PVAL=MR.BACKWARD.THRESHOLD_PVALS[ind]
       print(paste('Exposure p-value:', MR.BACKWARD.THRESHOLD_PVAL))
       sectionname<-paste('exposure_p_threshold', MR.BACKWARD.THRESHOLD_PVAL, sep='_')
       mr_results<-two_sample_mr.backward.serial(outcome_sumstat=processed_sumstat_name, exposure_ids=MR.COMPARISON_STUDIES, exposure_names=MR.COMPARISON_STUDIES.NAMES, exposure_threshold_p=MR.BACKWARD.THRESHOLD_PVAL, eval_singlesnp=TRUE)
-      allres[sectionname]<-list(mr_results)
-      if (ind==1){
-        allresdf=allresdf
+      if (length(allres)==0){
+        allresdf=mr_results$full_dataframe
       } else {
-        allresdf<-rbind(c(allresdf, mr_results$full_dataframe))
+        allresdf<-rbind(allresdf, mr_results$full_dataframe)
+      }
+      if (MR.SAVE_ONLYSUMMARY==FALSE){
+        allres[sectionname]<-list(mr_results)
       }
     }
-    allres$resdf<-allresdf
-    write_rds(allres, file=mr_ts_backward_resname)
+    allres$resdf<-list(allresdf)
+    allres$resdf[[1]]%>% 
+      filter(pval<0.05) %>% 
+      filter(method=='Inverse variance weighted')
+    saveRDS(allres, file=mr_ts_backward_resname)
   }
 }
 
+
+if (MR.FORWARD==TRUE){
+  if (!file.exists(mr_ts_forward_resname)){
+    print('Performing two sample MR analysis in backward direction (comparison phenotypes->target summary statistic)')
+    allres<-list()
+    allresdf<-'Undefined'
+    total_nsstats=length(MR.FORWARD.THRESHOLD_PVALS)
+    for (ind in c(1:length(MR.FORWARD.THRESHOLD_PVALS))){
+      if (ind%%10==0){
+        print(paste(int*100/total_nsstats, 'percent complete...'))
+      }
+      
+      MR.FORWARD.THRESHOLD_PVAL=MR.FORWARD.THRESHOLD_PVALS[ind]
+      print(paste('Exposure p-value:', MR.FORWARD.THRESHOLD_PVAL))
+      sectionname<-paste('exposure_p_threshold', MR.FORWARD.THRESHOLD_PVAL, sep='_')
+      mr_results<-two_sample_mr.forward.serial(exposure_sumstat=processed_sumstat_name, outcome_ids=MR.COMPARISON_STUDIES, outcome_names=MR.COMPARISON_STUDIES.NAMES, exposure_threshold_p=MR.FORWARD.THRESHOLD_PVAL, eval_singlesnp=TRUE)
+      if (length(allres)==0){
+        allresdf=mr_results$full_dataframe
+      } else {
+        allresdf<-rbind(allresdf, mr_results$full_dataframe)
+      }
+      if (MR.SAVE_ONLYSUMMARY==FALSE){
+        allres[sectionname]<-list(mr_results)
+      }
+    }
+    allres$resdf<-list(allresdf)
+    print('Significant interactions:')
+    allres$resdf[[1]]%>% 
+      filter(pval<0.05) %>% 
+      filter(method=='Inverse variance weighted')
+    saveRDS(allres, file=mr_ts_forward_resname)
+  }
+}
