@@ -28,6 +28,19 @@ two_sample_mr.backward.singular<-function(outcome_sumstat=processed_sumstat_name
   proceed=FALSE
   tryCatch({
   instruments<-extract_instruments(exposure_id, p1=exposure_threshold_p)
+  outcomes<- read_outcome_data(
+    snps = instruments$SNP,
+    filename = processed_sumstat_name,
+    sep = "\t",
+    snp_col = "rsid",
+    beta_col = "effect",
+    se_col = "se",
+    effect_allele_col = "A1",
+    other_allele_col = "A2",
+    pval_col = "pval",
+    samplesize_col = "npersons",
+    phenotype_col='phenotype'
+  )
   proceed=TRUE
   }, error = function(e){
     print('Network error...')
@@ -35,20 +48,6 @@ two_sample_mr.backward.singular<-function(outcome_sumstat=processed_sumstat_name
   )
   
   if (proceed==TRUE){
-    outcomes<- read_outcome_data(
-      snps = instruments$SNP,
-      filename = processed_sumstat_name,
-      sep = "\t",
-      snp_col = "rsid",
-      beta_col = "effect",
-      se_col = "se",
-      effect_allele_col = "A1",
-      other_allele_col = "A2",
-      pval_col = "pval",
-      samplesize_col = "npersons",
-      phenotype_col='phenotype'
-    )
-  
     result<-list()
     tryCatch({
       dat <- harmonise_data(instruments, outcomes) 
@@ -174,7 +173,7 @@ two_sample_mr.backward.serial<-function(outcome_sumstat=processed_sumstat_name, 
   
   for (i in c(1:length(exposure_ids))){
     if (i%%10==0){
-      print(paste(int*100/total_nsstats, '% complete...', sep=''))
+      print(paste((i/total_nsstats)*100, '% complete...', sep=''))
     }
     exposure_id=exposure_ids[i]
     exposure_name<-exposure_names[i]
@@ -219,7 +218,7 @@ two_sample_mr.forward.serial<-function(exposure_sumstat=processed_sumstat_name, 
   
   for (i in c(1:length(outcome_ids))){
     if (i%%10==0){
-      print(paste(int*100/total_nsstats, '% complete...', sep=''))
+      print(paste((i/total_nsstats)*100, '% complete...', sep=''))
     }
     outcome_id=outcome_ids[i]
     outcome_name<-outcome_names[i]
@@ -277,13 +276,15 @@ MR.SAVE_ONLYSUMMARY=TRUE
 MR.COMPARISON_STUDIES.MODE='PHENONAMES' #'PHENONAMES' or 'SPECIFIC'
 
 
-MR.COMPARISON_STUDIES.RUN_PHENONAMES<-c('schiz','depress','bipol','cholester','lipo','diab','fatty','covid','respir','serotonin','cholin','dopamin','anxiety','neuro','mental')
+MR.COMPARISON_STUDIES.RUN_PHENONAMES<-c('schiz','depress','bipol','cholester','lipo','diab','fatty','covid','respir','serotonin','cholin','dopamin','anxiety','neuro','mental','brain')
+MR.COMPARISON_STUDIES.RUN_SUBCATEGORIES<-c('Fatty acid','Cofactors and vitamins','Lipid','Amino acid','Carbohydrate','Metal','Personality','Unknown metabolite','Peptide','Protein','Behavioural','Sleeping','Diabetes','Psychiatric / neurological','Autoimmune / inflammatory','Immune system','Education','Metabolites ratio','Biomarker')
+
 MR.COMPARISON_STUDIES.RUN_SPECIFIC=c() #indexes of studies from ao
 MR.PHENONAMES.NCASE_THRESHOLD=4000
 MR.FORWARD.THRESHOLD_PVALS=c(5e-5) #threshold p-value for instrument extraction from the studied sumstat.
 MR.BACKWARD.THRESHOLD_PVALS=c(5e-8)
 
-
+unique(ao$subcategory)
 
 #-----SETTINGS: Local Covariance (SUPERGNOVA)-----
 #Local genetic covariance
@@ -352,7 +353,6 @@ if (!file.exists(processed_sumstat_name)){
 }
 
 #----2. Mendelian randomization (two sample)----
-
 if (MR.COMPARISON_STUDIES.MODE=='PHENONAMES'){
   MR.COMPARISON_STUDIES<-c()
   for (substring in MR.COMPARISON_STUDIES.RUN_PHENONAMES){
@@ -363,13 +363,19 @@ if (MR.COMPARISON_STUDIES.MODE=='PHENONAMES'){
       pull()
     MR.COMPARISON_STUDIES=c(MR.COMPARISON_STUDIES, MR.COMPARISON_STUDIES_PT)
   }
-} else {
+  for (subcat in MR.COMPARISON_STUDIES.RUN_SUBCATEGORIES){
+    MR.COMPARISON_STUDIES_PT=ao %>%
+      filter(subcategory==subcat) %>% 
+      filter(ncase>MR.PHENONAMES.NCASE_THRESHOLD) %>% 
+      select(id) %>% 
+      pull()
+    MR.COMPARISON_STUDIES=c(MR.COMPARISON_STUDIES, MR.COMPARISON_STUDIES_PT)
+  }
+  MR.COMPARISON_STUDIES=unique(MR.COMPARISON_STUDIES)
+  } else {
   MR.COMPARISON_STUDIES=MR.COMPARISON_STUDIES.RUN_SPECIFIC
 }
-MR.COMPARISON_STUDIES=MR.COMPARISON_STUDIES[1:3]
 MR.COMPARISON_STUDIES.NAMES=rep('default', length(MR.COMPARISON_STUDIES))
-
-
 
 
 if (MR.BACKWARD==TRUE){
@@ -383,7 +389,7 @@ if (MR.BACKWARD==TRUE){
       MR.BACKWARD.THRESHOLD_PVAL=MR.BACKWARD.THRESHOLD_PVALS[ind]
       print(paste('Exposure p-value:', MR.BACKWARD.THRESHOLD_PVAL))
       sectionname<-paste('exposure_p_threshold', MR.BACKWARD.THRESHOLD_PVAL, sep='_')
-      mr_results<-two_sample_mr.backward.serial(outcome_sumstat=processed_sumstat_name, exposure_ids=MR.COMPARISON_STUDIES, exposure_names=MR.COMPARISON_STUDIES.NAMES, exposure_threshold_p=MR.BACKWARD.THRESHOLD_PVAL, eval_singlesnp=FALSE)
+      mr_results<-two_sample_mr.backward.serial(outcome_sumstat=processed_sumstat_name, exposure_ids=MR.COMPARISON_STUDIES, exposure_names=MR.COMPARISON_STUDIES.NAMES, exposure_threshold_p=MR.BACKWARD.THRESHOLD_PVAL, eval_singlesnp=FALSE, onlysum=MR.SAVE_ONLYSUMMARY)
       if (length(allres)==0){
         allresdf=mr_results$full_dataframe
       } else {
@@ -394,12 +400,15 @@ if (MR.BACKWARD==TRUE){
       }
     }
     allres$resdf<-list(allresdf)
-    allres$resdf[[1]]%>% 
+    print('Significant interactions:')
+    print(allres$resdf[[1]]%>% 
       filter(pval<0.05) %>% 
-      filter(method=='Inverse variance weighted')
+      filter(method=='Inverse variance weighted'))
     saveRDS(allres, file=mr_ts_backward_resname)
   }
 }
+
+
 
 if (MR.FORWARD==TRUE){
   if (!file.exists(mr_ts_forward_resname)){
