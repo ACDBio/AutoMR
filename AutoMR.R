@@ -2,6 +2,10 @@ library(tidyverse)
 library(dplyr)
 library(TwoSampleMR)
 library(readr)
+library(igraph)
+library(ggsci)
+library(NetPathMiner)
+
 #----FUNCTIONALITY----
 #Adds rsid to summary statistics if a mapping file with chromosomal positions is supplied
 #Performs bulk MR analysis in both directions with specific summary statistics from TwoSampleMR package or with summary statistics for phenotypes containing specific substrings in their names
@@ -243,8 +247,25 @@ two_sample_mr.forward.serial<-function(exposure_sumstat=processed_sumstat_name, 
   allres
 }
 
+GroupByVertex01 = function(Groups, spacing = 5) {
+  Position = (order(Groups) + spacing*Groups)
+  Angle    = Position * 2 * pi / max(Position)
+  matrix(c(cos(Angle), sin(Angle)), ncol=2)
+}
 
-
+GroupByVertex02 = function(Groups) {
+  numGroups = length(unique(Groups))
+  GAngle    = (1:numGroups) * 2 * pi / numGroups
+  Centers   = matrix(c(cos(GAngle), sin(GAngle)), ncol=2)
+  x = y = c()
+  for(i in 1:numGroups) {
+    curGroup = which(Groups == unique(Groups)[i])
+    VAngle = (1:length(curGroup)) * 2 * pi / length(curGroup)
+    x = c(x, Centers[i,1] + cos(VAngle) / numGroups )
+    y = c(y, Centers[i,2] + sin(VAngle) / numGroups)
+  }
+  matrix(c(x, y), ncol=2)
+}
 
 
 
@@ -253,7 +274,8 @@ two_sample_mr.forward.serial<-function(exposure_sumstat=processed_sumstat_name, 
 gwas_sumstatfile_path<-'/home/biorp/Gitrepos/Psychiatry/SUMSTATS/anged/anged/dop_pheno_all.anged.glm.logistic.hybrid'
 annotationfile_path<-'/home/biorp/Gitrepos/Psychiatry/SUMSTATS/psychiatric_genomics_chip_mapping.tsv' #file with mapping columns: CHR, POS, rsid
 ldsc_munge_sumstats_path<-'/home/biorp/TOOLS/ldsc/munge_sumstats.py'
-gwasname<-'anhedonia'
+gwasname<-'Anhedonia'
+gwassource<-'current study'
 chr_col='#CHROM'
 pos_col='POS'
 effect_col='LOG_OR'
@@ -278,6 +300,7 @@ mr_ts_backward_signif_resname=paste(gwasname, '_twosample_backward_signif.rds', 
 mr_ts_forward_signif_resname=paste(gwasname, '_twosample_forward_signif.rds', sep='')
 mr_ts_resdfname=paste(gwasname, '_all_mr_res.tsv', sep='')
 mr_ts_signif_resdfname=paste(gwasname, '_all_mr_res_signif.tsv', sep='')
+mr_ts_graphdata<-paste(gwasname, '_all_mr_res_signif_graph.rds', sep='')
 
 MR.FORWARD=TRUE
 MR.BACKWARD=TRUE
@@ -294,7 +317,7 @@ MR.FORWARD.THRESHOLD_PVALS=c(5e-5) #threshold p-value for instrument extraction 
 MR.BACKWARD.THRESHOLD_PVALS=c(5e-8)
 MR.VISUALIZE=TRUE
 
-
+#---***----
 #-----RUN-----
 #----1. Preprocessing----
 if (!file.exists(processed_sumstat_name)){
@@ -328,7 +351,9 @@ if (!file.exists(processed_sumstat_name)){
     write_tsv(processed_sumstat_name)
 }
 
-#----2. Mendelian randomization (two sample)----
+#----***----
+#----2. Mendelian randomization (two sample) run----
+#----2.1 Selection of comparison studies----
 if (MR.COMPARISON_STUDIES.MODE=='PHENONAMES'){
   MR.COMPARISON_STUDIES<-c()
   for (substring in MR.COMPARISON_STUDIES.RUN_PHENONAMES){
@@ -359,7 +384,7 @@ MR.COMPARISON_STUDIES.NAMES=rep('default', length(MR.COMPARISON_STUDIES))
 
 
 
-
+#----2.2 MR run in backward direction-----
 if (MR.BACKWARD==TRUE){
   if (!file.exists(mr_ts_backward_resname)){
     print('Performing two sample MR analysis in backward direction (comparison phenotypes->target summary statistic)')
@@ -391,7 +416,7 @@ if (MR.BACKWARD==TRUE){
 }
 
 
-
+#-----2.3 MR run in foreward direction-----
 if (MR.FORWARD==TRUE){
   if (!file.exists(mr_ts_forward_resname)){
     print('Performing two sample MR analysis in backward direction (comparison phenotypes->target summary statistic)')
@@ -423,6 +448,8 @@ if (MR.FORWARD==TRUE){
 }
 
 
+
+#----2.4 Saving nominally significant results----
 if (MR.BACKWARD==TRUE){
   if (!file.exists(mr_ts_backward_signif_resname)){
     print('Gathering data for significant MR hits in backward direction...')
@@ -445,7 +472,6 @@ if (MR.BACKWARD==TRUE){
   }
 }
 
-bckwd_signif_res$`ebi-a-GCST90000529`$pleiotropy_test
 
 
 if (MR.FORWARD==TRUE){
@@ -471,7 +497,7 @@ if (MR.FORWARD==TRUE){
 }
 
 
-
+#----2.5 Saving resulting dataframes-----
 if (!file.exists(mr_ts_resdfname)){
   print('Saving MR results...')
   if (MR.FORWARD==TRUE && MR.BACKWARD==TRUE){
@@ -507,10 +533,13 @@ if (!file.exists(mr_ts_signif_resdfname)){
 }
 
 
-
-#-----MR significant results visualization-----
+#-----***-----
+#-----3. Visualization of MR results-----
 if (MR.VISUALIZE==TRUE){
-  
+  if (!file.exists(mr_ts_graphdata)){
+    
+    
+  }
 }
 mrres<-read_tsv(mr_ts_resdfname)
 mrres_signif<-read_tsv(mr_ts_signif_resdfname)
@@ -528,14 +557,63 @@ mr_data_forvis<-mrres %>%
 mr_data_forvis<-mr_data_forvis %>% 
   mutate(is_significant_interaction=as.numeric(pval<MR.RESULTS.PVAL_THRESHOLD)) %>% 
   mutate(neglgp=-log10(pval)) %>% 
-  mutate(increase=or>1)
+  mutate(increase=as.numeric(or>1)+1)
 mr_data_forvis_graph<-mr_data_forvis %>% 
-  select(-c(id.exposure, id.outcome, method, exposure.pipename, outcome.pipename))
-ao<-available_outcomes()
+  select(-c(id.exposure, id.outcome, method, exposure.pipename, outcome.pipename)) %>% 
+  mutate(color_code=increase*is_significant_interaction)
+mr_data_forvis_graph
 
+ao_ann<-available_outcomes()
+ao_ann<-ao_ann%>% 
+  mutate(vertex=paste(trait, '||', paste('id:',id, sep='')))
+  
 nodedata<-tibble(vertex=nodes)
+nodedata<-left_join(nodedata, ao_ann)
+nodedata$subcategory[is.na(nodedata$subcategory)]<-'Target'
+nodedata$trait[is.na(nodedata$trait)]<-gwasname
+nodedata$subcategory[nodedata$subcategory=='NA']<-'Other'
+nodedata$id[nodedata$vertex==gwasname]<-gwassource
+
+#----->Manual subcategory setting----
+#Here subcategories can be written manually
+nodedata$subcategory<-c('Psychiatric / Neurological', 'Psychiatric / Neurological', 'Diabetes','Diabetes','Personality','Target','Psychiatric / Neurological','Psychiatric / Neurological', 'Psychiatric / Neurological','Psychiatric / Neurological','Psychiatric / Neurological','Psychiatric / Neurological','Lipids','Lipids','Lipids','Respiratory system', 'Respiratory system','Psychiatric / Neurological','Psychiatric / Neurological','Inflammatory GI diseases','Inflammatory GI diseases','Inflammatory GI diseases', 'Cancer','Cancer','Cancer')
 
 
-g = graph_from_data_frame(d, directed = TRUE, vertices = NULL)
 
+g = graph_from_data_frame(mr_data_forvis_graph, directed = TRUE, vertices = nodedata)
+vertex_groups<-V(g)[c(1:length(V(g)))]$subcategory
+vertex_groups<-factor(vertex_groups)
+vertex_groups_numeric<-unclass(vertex_groups)
+
+
+node_colors<-pal_aaas(palette = c("default"))(max(vertex_groups_numeric))
+
+#GBV1 = GroupByVertex01(vertex_groups_numeric)
+#GBV2 = GroupByVertex02(vertex_groups)
+edge_colors<-c('slategray','blueviolet','darkred')[E(g)$color_code+1]
+edge_colors<-c('slategray','midnightblue','darkorchid')[E(g)$color_code+1]
+
+V(g)$labels<-paste(paste(V(g)$trait, sep=''),'\n', V(g)$id)
+
+V(g)$size<-as.numeric(V(g)$name=='Anhedonia')*15+5
+
+g<-setAttribute(g, 'subcategory', V(g)$subcategory)
+l = layoutVertexByAttr(g, "subcategory", cluster.strength=7)
+
+plot(g,vertex.size=V(g)$size,
+     vertex.label=V(g)$labels, 
+     vertex.frame.color = "white",
+     vertex.label.dist=1.2,
+     vertex.label.color='gray10',
+     vertex.color=adjustcolor(node_colors[vertex_groups_numeric], alpha.f = .9),
+     vertex.label.family="Helvetica",
+     vertex.label.cex=0.7, 
+     edge.curved=TRUE,
+     edge.curved=0.05,
+     edge.arrow.size=1,
+     edge.arrow.width=0.6,
+     edge.color=adjustcolor(edge_colors, alpha.f=.7), 
+     edge.width=as.integer(cut(abs(E(g)$neglgp), breaks = 5))*1.3, 
+     ylim=c(-1,1),xlim=c(-0.7,1.2), asp = 0.8, 
+     layout=l)
 
