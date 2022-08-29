@@ -577,7 +577,7 @@ nodedata$id[nodedata$vertex==gwasname]<-gwassource
 #----->Manual subcategory setting----
 #Here subcategories can be written manually
 nodedata$subcategory<-c('Psychiatric / Neurological', 'Psychiatric / Neurological', 'Diabetes','Diabetes','Personality','Target','Psychiatric / Neurological','Psychiatric / Neurological', 'Psychiatric / Neurological','Psychiatric / Neurological','Psychiatric / Neurological','Psychiatric / Neurological','Lipids','Lipids','Lipids','Respiratory system', 'Respiratory system','Psychiatric / Neurological','Psychiatric / Neurological','Inflammatory GI diseases','Inflammatory GI diseases','Inflammatory GI diseases', 'Cancer','Cancer','Cancer')
-
+mr_data_forvis_graph <- mr_data_forvis_graph[, c("exposure", "outcome", colnames(mr_data_forvis_graph)[c(3:length(colnames(mr_data_forvis_graph)))])]
 
 
 g = graph_from_data_frame(mr_data_forvis_graph, directed = TRUE, vertices = nodedata)
@@ -590,7 +590,7 @@ node_colors<-pal_aaas(palette = c("default"))(max(vertex_groups_numeric))
 
 #GBV1 = GroupByVertex01(vertex_groups_numeric)
 #GBV2 = GroupByVertex02(vertex_groups)
-edge_colors<-c('slategray','blueviolet','darkred')[E(g)$color_code+1]
+#edge_colors<-c('slategray','blueviolet','darkred')[E(g)$color_code+1]
 edge_colors<-c('slategray','midnightblue','darkorchid')[E(g)$color_code+1]
 
 V(g)$labels<-paste(paste(V(g)$trait, sep=''),'\n', V(g)$id)
@@ -607,13 +607,13 @@ plot(g,vertex.size=V(g)$size,
      vertex.label.color='gray10',
      vertex.color=adjustcolor(node_colors[vertex_groups_numeric], alpha.f = .9),
      vertex.label.family="Helvetica",
-     vertex.label.cex=0.7, 
+     vertex.label.cex=0.5, 
      edge.curved=TRUE,
      edge.curved=0.05,
      edge.arrow.size=1,
      edge.arrow.width=0.6,
      edge.color=adjustcolor(edge_colors, alpha.f=.7), 
      edge.width=as.integer(cut(abs(E(g)$neglgp), breaks = 5))*1.3, 
-     ylim=c(-1,1),xlim=c(-0.7,1.2), asp = 0.8, 
+     ylim=c(-1,1),xlim=c(-1,1.2), asp = .8, 
      layout=l)
 
