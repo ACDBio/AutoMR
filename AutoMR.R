@@ -5,8 +5,6 @@ library(readr)
 #----FUNCTIONALITY----
 #Adds rsid to summary statistics if a mapping file with chromosomal positions is supplied
 #Performs bulk MR analysis in both directions with specific summary statistics from TwoSampleMR package or with summary statistics for phenotypes containing specific substrings in their names
-#Does LDSC preprocessing
-#Performs local genetic covariation analysis with SUPERGNOVA
 
 #-----FUNCTIONS------
 unify_sumstat_colnames<-function(sumstat, outcomename=gwasname,rsid_coln=rsid_col, effect_coln=effect_col, se_coln=se_col, pval_coln=pval_col, effect_allele_coln=effect_allele_col, other_allele_coln=other_allele_col, n=npersons){
@@ -252,7 +250,6 @@ two_sample_mr.forward.serial<-function(exposure_sumstat=processed_sumstat_name, 
 
 
 #-----SETTINGS-----
-
 gwas_sumstatfile_path<-'/home/biorp/Gitrepos/Psychiatry/SUMSTATS/anged/anged/dop_pheno_all.anged.glm.logistic.hybrid'
 annotationfile_path<-'/home/biorp/Gitrepos/Psychiatry/SUMSTATS/psychiatric_genomics_chip_mapping.tsv' #file with mapping columns: CHR, POS, rsid
 ldsc_munge_sumstats_path<-'/home/biorp/TOOLS/ldsc/munge_sumstats.py'
