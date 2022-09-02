@@ -1,5 +1,5 @@
 # 
-> A script to run two-sample Mendelian Randomization (MR) using IEU GWAS data with provided in-house summary statistic in an automated manner.
+> A script to run two-sample Mendelian Randomization (MR) in predefined directions using IEU GWAS data with provided in-house summary statistic in an automated manner.
 
 Example command (to run MR to assess the effect of the summary statistic of interest (./ex/GWAS_example.tsv) on a range of IEU phenotypes):
  ```shell
