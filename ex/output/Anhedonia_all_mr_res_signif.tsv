@@ -1,0 +1,3 @@
+id.exposure	id.outcome	outcome	exposure	method	nsnp	b	se	pval	lo_ci	up_ci	or	or_lci95	or_uci95	outcome.pipename	exposure_threshold_pval
+rQhME8	ukb-d-20448	Professional informed about depression || id:ukb-d-20448	Anhedonia	Inverse variance weighted	28	0.00112296866325288	5.512455981092971e-4	0.04163525014656137	4.252729095866395e-5	0.0022034100355471	1.00112359942865	1.0000425281952567	1.002205839327354	default	5e-5
+rQhME8	ieu-b-18	multiple sclerosis || id:ieu-b-18	Anhedonia	Inverse variance weighted	21	0.00793324682112881	0.00377559496179308	0.03562418761506591	5.330806960143677e-4	0.01533341294624326	1.0079647984040008	1.00053322280878	1.015451572881746	default	5e-5
