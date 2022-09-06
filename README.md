@@ -1,4 +1,4 @@
-#AutoMR
+# AutoMR
 ![Project Image](https://github.com/ACDBio/AutoMR/blob/main/AutoMR_scheme.png)
 > A script to run two-sample Mendelian Randomization (MR) in predefined directions using IEU GWAS data with provided in-house summary statistic in an automated manner.
 
