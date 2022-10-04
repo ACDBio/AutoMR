@@ -1,0 +1,1 @@
+Rscript AutoMR.R -i './ex/anhedonia_preprocessed.tsv' -r 'rsid' -e 'effect' -o 'OR' -s 'se' -p 'pval' --effect_allele_column 'A1' --other_allele_column 'A2' -n 4520 -f TRUE -b FALSE --grep_phenotypes 'depress,bipol' --grep_subcategories 'Psychiatric / neurological' --specific_studies 'ieu-b-5075' -d 4000 --forward_pvals 5e-5  --visualize TRUE -x 'Anhedonia,current study'
